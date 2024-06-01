@@ -1,16 +1,17 @@
 #init TR-backend repository
 from typing import Union
-from fastapi import FastAPI
+from fastapi import FastAPI,APIRouter
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
+router = APIRouter()
 
 app = FastAPI()
 
 origins = [
     "http://localhost:3000",  # React 개발 서버 주소
-    "http://localhost:8000"
+    # "http://localhost:8000"
 ]
 
 app.add_middleware(
@@ -21,8 +22,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class TextData(BaseModel):
     text: str
+
 
 @app.post("/text")
 async def receive_text(data: TextData):
@@ -49,3 +52,5 @@ async def read_root():
         </body>
     </html>
     """
+app.include_router(router, prefix="/api")
+#최상위 path를 "/api"로 지정하기
