@@ -3,7 +3,8 @@ from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+
 
 app = FastAPI()
 
@@ -28,6 +29,12 @@ async def receive_text(data: TextData):
     global received_text
     received_text = data.text
     return {"received_text": received_text}
+
+rtext = "test sentence!!! fastapi에서 전송한 문장"
+
+@app.get("/text", response_class=JSONResponse)  #프론트로 전송
+async def get_text():
+    return {"received_text": rtext}
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
