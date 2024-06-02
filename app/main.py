@@ -7,7 +7,10 @@ import shutil
 from pathlib import Path
 import logging
 from pydantic import BaseModel
-
+from fastapi.responses import HTMLResponse, JSONResponse
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
 
 # 데이터베이스 오류 자세히 확인하기 위한 로깅 설정
 logging.basicConfig(
@@ -86,3 +89,29 @@ async def register(signup_data: SignUpData):
     return {"success": "회원가입이 완료되었습니다."}
 
 
+class TextData(BaseModel):
+    text: str
+
+
+@app.post("/text")
+async def receive_text(data: TextData):
+    api_key = os.getenv("API_KEY")
+    openai.api_key = api_key
+    
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": f"{data.text} 라는 일기에 어울리는 이모지를 최대 4개까지 한줄에 출력해줘"}
+            ],
+            temperature=0.8,
+        )
+        received_text = data.text + " " + response.choices[0].message["content"]
+        return {"received_text": received_text}
+    except Exception as e:
+        logging.error(f"Error with OpenAI API: {e}")
+        raise HTTPException(status_code=500, detail="OpenAI API request failed")
+
+@app.get("/text")
+async def get_text():
+    return {"received_text": "default text"}
