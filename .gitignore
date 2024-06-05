@@ -148,6 +148,8 @@ Dockerfile
 index.html
 __main__.py
 .gitconfig
+start.sh  
+requirements.txt
 # Visual Studio Code IDE 설정 파일
 .vscode/
 

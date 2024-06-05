@@ -8,9 +8,21 @@ from pathlib import Path
 import logging
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse
+import openai
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY is not set in the environment variables")
+
+# OpenAI API 키 설정
+openai.api_key = OPENAI_API_KEY
 
 # 데이터베이스 오류 자세히 확인하기 위한 로깅 설정
 logging.basicConfig(
@@ -20,7 +32,8 @@ logging.basicConfig(
 )
 
 app = FastAPI()
-now = datetime.now()
+
+
 
 # CORS 설정
 origins = ["*"]  # React 개발 서버 URL, * 표시하면 모두 허용
@@ -95,11 +108,9 @@ class TextData(BaseModel):
 
 @app.post("/text")
 async def receive_text(data: TextData):
-    api_key = os.getenv("API_KEY")
-    openai.api_key = api_key
-    
+    logging.info("Received text: %s", data.text)
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.Completion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "user", "content": f"{data.text} 라는 일기에 어울리는 이모지를 최대 4개까지 한줄에 출력해줘"}
@@ -107,11 +118,27 @@ async def receive_text(data: TextData):
             temperature=0.8,
         )
         received_text = data.text + " " + response.choices[0].message["content"]
+        logging.info("Generated response: %s", received_text)
         return {"received_text": received_text}
+    except openai.error.OpenAIError as e:
+        logging.error("OpenAI API request failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"OpenAI API request failed: {e}")
     except Exception as e:
-        logging.error(f"Error with OpenAI API: {e}")
-        raise HTTPException(status_code=500, detail="OpenAI API request failed")
+        logging.error("Unexpected error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
-@app.get("/text")
+
+@app.get("/aitext")
 async def get_text():
     return {"received_text": "default text"}
+
+
+
+# @app.get("/config")
+# def config_endpoint():
+#     return os.environ.get("OPENAI_API_KEY")
+
+# @app.get("/config")
+# def config_endpoint():
+#     openai_api_key = os.environ.get("OPENAI_API_KEY")
+#     return {"OPENAI_API_KEY": openai.api_key}
