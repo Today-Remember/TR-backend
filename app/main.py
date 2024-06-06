@@ -8,7 +8,7 @@ from pathlib import Path
 import logging
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse
-import openai
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
@@ -16,13 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY is not set in the environment variables")
-
-# OpenAI API 키 설정
-openai.api_key = OPENAI_API_KEY
 
 # 데이터베이스 오류 자세히 확인하기 위한 로깅 설정
 logging.basicConfig(
@@ -32,7 +26,6 @@ logging.basicConfig(
 )
 
 app = FastAPI()
-
 
 
 # CORS 설정
@@ -63,10 +56,10 @@ def db_conn():
         logging.error(f"Error connecting to the database: {e}")
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-@app.get("/")
-def read_root():
-    logging.info("Root endpoint called")
-    return {"name": "1234"}
+# @app.get("/")
+# def read_root():
+#     logging.info("Root endpoint called")
+#     return {"name": "1234"}
 
 class SignUpData(BaseModel):
     id: str
@@ -106,39 +99,39 @@ class TextData(BaseModel):
     text: str
 
 
-@app.post("/text")
-async def receive_text(data: TextData):
-    logging.info("Received text: %s", data.text)
-    try:
-        response = openai.Completion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": f"{data.text} 라는 일기에 어울리는 이모지를 최대 4개까지 한줄에 출력해줘"}
-            ],
-            temperature=0.8,
-        )
-        received_text = data.text + " " + response.choices[0].message["content"]
-        logging.info("Generated response: %s", received_text)
-        return {"received_text": received_text}
-    except openai.error.OpenAIError as e:
-        logging.error("OpenAI API request failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"OpenAI API request failed: {e}")
-    except Exception as e:
-        logging.error("Unexpected error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 
-@app.get("/aitext")
-async def get_text():
-    return {"received_text": "default text"}
+@app.post("/detail")
+async def generated_content(diary_content: str = Form(...)):
+ 
+    api_key = os.environ.get("OPENAI_API_KEY")
+    client = OpenAI(api_key=api_key)
+
+    completion = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "user", "content": f"{diary_content} 라는 일기에 어울리는 이모지를 최대 4개까지 한줄에 출력해줘"}
+    ],
+    temperature=0.8,
+    )
+    generated_content =f"{diary_content} "+completion.choices[0].message.content
+
+    response_html = f"<html><body><p>{generated_content}</p></body></html>"
+    return HTMLResponse(content=response_html)
 
 
+@app.get("/config")
+def config_endpoint():
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    return {"OPENAI_API_KEY": openai.api_key}
+    
 
-# @app.get("/config")
-# def config_endpoint():
-#     return os.environ.get("OPENAI_API_KEY")
+@app.get("/")
+async def main():
+    content = """<body><form action="/detail" method="post">
+                <h1>일기 입력하기</h1>
+                <input type="text" name="diary_content">
+                <button type="submit">일기 작성 완료</button>
+                </form></body>"""
+    return HTMLResponse(content=content)
 
-# @app.get("/config")
-# def config_endpoint():
-#     openai_api_key = os.environ.get("OPENAI_API_KEY")
-#     return {"OPENAI_API_KEY": openai.api_key}
