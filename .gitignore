@@ -23,6 +23,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+.npm
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -145,11 +146,11 @@ Dockerfile
 .wget-hsts
 .profile
 .bash_history
-requirements.txt
-start.sh
 index.html
 __main__.py
 .gitconfig
+start.sh  
+requirements.txt
 # Visual Studio Code IDE 설정 파일
 .vscode/
 
