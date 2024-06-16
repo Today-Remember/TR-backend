@@ -175,7 +175,7 @@ async def generated_content(diary_content: str = Form(...)):
     completion = client.chat.completions.create(
     model="gpt-3.5-turbo",
     messages=[
-        {"role": "user", "content": f"{diary_content} 라는 일기에 어울리는 이모지를 최대 4개까지 한줄에 출력해줘."}
+        {"role": "user", "content": f"{diary_content} 라는 일기에 어울리는 이모지를 최대 4개까지 한줄에 출력해줘"}
     ],
     temperature=0.8,
     )
@@ -194,8 +194,7 @@ async def generated_content(entry: DiaryEntry):
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-
-                {"role": "user", "content": f"{diary} 라는 일기에 어울리는 이모지를 최대 4개까지 한 줄에 출력해줘. 이모티콘 외엔 절대 다른말을 하지마"}
+                {"role": "user", "content": f"{entry.text} 라는 일기에 어울리는 이모지를 최대 4개까지 한 줄에 출력해줘. 이모지만 출력해야해."}
             ],
             temperature=0.8
         )
