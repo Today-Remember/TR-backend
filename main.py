@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Query, File, UploadFile, HTTPException
+from fastapi import FastAPI, Form, Query, File, UploadFile, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import pymysql
@@ -11,6 +11,13 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAIError
 import openai
+from datetime import timedelta, datetime
+from fastapi.security import OAuth2PasswordRequestForm
+from jose import jwt
+import secrets
+
+from fastapi import Depends
+from starlette import status
 
 app = FastAPI()
 
@@ -110,6 +117,18 @@ class LoginData(BaseModel):
     id: str
     password: str
 
+
+#-----------------------------------------------
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    username: str
+
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+SECRET_KEY = secrets.token_hex(32)
+ALGORITHM = "HS256"
+#---------------------------------------------
+
 @app.post("/login")
 async def login(login_data: LoginData):
     db = db_conn()
@@ -131,7 +150,20 @@ async def login(login_data: LoginData):
     except pymysql.MySQLError as e:
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
     finally:
+        # db.close()
+
+        data = {
+            "sub": login_data.id,
+            "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        }
+        access_token = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM) # 토큰 생성
         db.close()
+        return {
+            "user": login_data.id,
+            "success": "로그인 성공",
+            "token": access_token,
+            "token_type": "bearer"
+        }
 
 
 @app.post("/viewaitext")
@@ -151,36 +183,35 @@ async def generated_content(diary_content: str = Form(...)):
     return generated_content
 
 
-class DiaryContent(BaseModel):
+class DiaryEntry(BaseModel):
     text: str
-    
+    user_id: str
+
 @app.post("/detail")
-async def generated_content(diary_content: DiaryContent):
-    diary = diary_content
+async def generated_content(entry: DiaryEntry):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": f"{diary} 라는 일기에 어울리는 이모지를 최대 4개까지 한 줄에 출력해줘. 이모지만 출력해야해."}
+                {"role": "user", "content": f"{entry.text} 라는 일기에 어울리는 이모지를 최대 4개까지 한 줄에 출력해줘. 이모지만 출력해야해."}
             ],
             temperature=0.8
         )
-        # received_text = f"{diary}" + response.choices[0].message['content'].strip()
-        received_text = f"{diary.text}" + response.choices[0].message['content'].strip()
+        received_text = entry.text + response.choices[0].message['content'].strip()
+        
     except OpenAIError as e:
         raise HTTPException(status_code=500, detail=f"OpenAI API 요청 실패: {e}")
-
 
     db = db_conn()
 
     try:
         with db.cursor() as cursor:
             sql = '''
-                INSERT INTO Diary (detail) 
-                VALUES (%s)
+                INSERT INTO Diary (member_id, detail) 
+                VALUES (%s, %s)
             '''
-            cursor.execute(sql, (received_text,))
+            cursor.execute(sql, (entry.user_id, received_text))
             db.commit()
     except pymysql.MySQLError as e:
         db.rollback()
@@ -190,18 +221,20 @@ async def generated_content(diary_content: DiaryContent):
 
     return {"received_text": received_text}
 
+
+
 @app.get("/detail")
-async def get_details(date: str = Query(...)):
+async def get_details(date: str = Query(...), member_id: str = Query(...)):
     db = db_conn()
     try:
         with db.cursor() as cursor:
-            sql = '''SELECT * FROM Diary WHERE DATE(date) = (%s)'''
-            cursor.execute(sql, (date))
+            sql = '''SELECT * FROM Diary WHERE DATE(date) = (%s) AND member_id = %s'''
+            cursor.execute(sql, (date, member_id))
             results = cursor.fetchall()
             if results:
                 return {"일기": results}
             else:
-                raise HTTPException(status_code=401, detail="날짜에 해당하는 일기 찾기 실패")
+                raise HTTPException(status_code=404, detail="날짜에 해당하는 일기 찾기 실패")
     except pymysql.MySQLError as e:
         logging.error(f"Database operation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
