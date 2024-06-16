@@ -128,9 +128,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 SECRET_KEY = secrets.token_hex(32)
 ALGORITHM = "HS256"
 #---------------------------------------------
-
 @app.post("/login")
 async def login(login_data: LoginData):
+    if not login_data.id or not login_data.password:
+        raise HTTPException(status_code=400, detail="ID와 비밀번호를 모두 입력해주세요")
+
     db = db_conn()
     try:
         with db.cursor() as cursor:
@@ -144,26 +146,24 @@ async def login(login_data: LoginData):
             ))
             result = cursor.fetchone()
             if result:
-                return {"success": "로그인 성공", "user": result}
+                data = {
+                    "sub": login_data.id,
+                    "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+                }
+                access_token = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM) # 토큰 생성
+                return {
+                    "user": login_data.id,
+                    "success": "로그인 성공",
+                    "token": access_token,
+                    "token_type": "bearer"
+                }
             else:
                 raise HTTPException(status_code=401, detail="Invalid credentials")
     except pymysql.MySQLError as e:
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
     finally:
-        # db.close()
-
-        data = {
-            "sub": login_data.id,
-            "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        }
-        access_token = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM) # 토큰 생성
         db.close()
-        return {
-            "user": login_data.id,
-            "success": "로그인 성공",
-            "token": access_token,
-            "token_type": "bearer"
-        }
+
 
 
 @app.post("/viewaitext")
