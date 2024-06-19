@@ -153,7 +153,6 @@ async def login(login_data: LoginData):
         db.close()
 
 
-
 @app.post("/viewaitext")
 async def generated_content(diary_content: str = Form(...)):
 
@@ -205,6 +204,28 @@ async def generated_content(entry: DiaryEntry):
         db.close()
 
     return {"received_text": received_text}
+
+class data(BaseModel):
+    date: str
+    member_id: str
+
+@app.delete("/delete")
+async def delete_diary(Data: data):
+    db = db_conn()
+    try:
+        with db.cursor() as cursor:
+            sql = '''DELETE FROM Diary WHERE member_id = %s AND DATE(date) = %s'''
+            cursor.execute(sql, (Data.member_id, Data.date))
+            db.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="해당 조건에 맞는 일기를 찾을 수 없습니다.")
+    except pymysql.MySQLError as e:
+        logging.error(f"Database operation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
+    finally:
+        db.close()
+
+    return {"success": "일기가 삭제되었습니다."}
 
 
 
