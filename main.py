@@ -1,5 +1,7 @@
-from fastapi import FastAPI, Form, Query, File, UploadFile, HTTPException, APIRouter
+from fastapi import FastAPI, Form, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
+from starlette import status
 from typing import Optional
 import pymysql
 import shutil
@@ -12,12 +14,8 @@ from dotenv import load_dotenv
 from openai import OpenAIError
 import openai
 from datetime import timedelta, datetime
-from fastapi.security import OAuth2PasswordRequestForm
 from jose import jwt
 import secrets
-
-from fastapi import Depends
-from starlette import status
 
 app = FastAPI()
 
@@ -30,14 +28,6 @@ api_key = os.getenv("OPENAI_API_KEY")
 
 # API 키 설정
 openai.api_key = api_key
-
-
-# .env 파일 로드
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# load_dotenv(os.path.join(BASE_DIR, ".env"))
-
-# api_key = os.environ.get("OPENAI_API_KEY")
-# client = OpenAI(api_key=api_key)
 
 
 # 데이터베이스 오류 자세히 확인하기 위한 로깅 설정
@@ -104,7 +94,6 @@ async def register(signup_data: SignUpData):
                 signup_data.email
             ))
             db.commit()
-
     except pymysql.MySQLError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
@@ -118,7 +107,6 @@ class LoginData(BaseModel):
     password: str
 
 
-#-----------------------------------------------
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -127,7 +115,7 @@ class Token(BaseModel):
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 SECRET_KEY = secrets.token_hex(32)
 ALGORITHM = "HS256"
-#---------------------------------------------
+
 @app.post("/login")
 async def login(login_data: LoginData):
     if not login_data.id or not login_data.password:
@@ -165,12 +153,8 @@ async def login(login_data: LoginData):
         db.close()
 
 
-
 @app.post("/viewaitext")
 async def generated_content(diary_content: str = Form(...)):
-
-    # api_key = os.environ.get("OPENAI_API_KEY")
-    # client = OpenAI(api_key=api_key)
 
     completion = client.chat.completions.create(
     model="gpt-3.5-turbo",
@@ -240,8 +224,6 @@ async def get_details(date: str = Query(...), member_id: str = Query(...)):
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
     finally:
         db.close()
-
-    
 
 
 @app.get("/config")
