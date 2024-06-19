@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Query, File, UploadFile, HTTPException
+from fastapi import FastAPI, Form, Query, File, UploadFile, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import pymysql
@@ -11,7 +11,13 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAIError
 import openai
+from datetime import timedelta, datetime
+from fastapi.security import OAuth2PasswordRequestForm
+from jose import jwt
+import secrets
 
+from fastapi import Depends
+from starlette import status
 app = FastAPI()
 
 # .env 파일 로드
@@ -78,6 +84,7 @@ class SignUpData(BaseModel):
     name: str
     password: str
     email: str
+    token: str
 
 @app.post("/signup")
 async def register(signup_data: SignUpData):
@@ -110,9 +117,22 @@ class LoginData(BaseModel):
     id: str
     password: str
 
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    username: str
+
+
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+SECRET_KEY = secrets.token_hex(32)
+ALGORITHM = "HS256"
+
+
 @app.post("/login")
 async def login(login_data: LoginData):
     db = db_conn()
+    
     try:
         with db.cursor() as cursor:
             sql = '''
@@ -131,7 +151,19 @@ async def login(login_data: LoginData):
     except pymysql.MySQLError as e:
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
     finally:
+        data = {
+            "sub": login_data.id,
+            "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        }
+        access_token = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM) # 토큰 생성
         db.close()
+        return {
+            "success": "로그인 성공",
+            "token": access_token,
+            "token_type": "bearer"
+        }
+
+    
 
 
 @app.post("/viewaitext")
@@ -208,11 +240,10 @@ async def get_details(date: str = Query(...)):
     finally:
         db.close()
 
-    
-
 
 @app.get("/config")
 def config_endpoint():
     openai_api_key = os.environ.get("OPENAI_API_KEY")
     return {api_key}
     
+
